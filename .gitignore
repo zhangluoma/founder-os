@@ -1,0 +1,5 @@
+state/*.log
+state/.*.lock
+.env
+__pycache__/
+*.pyc

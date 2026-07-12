@@ -1,0 +1,73 @@
+#!/bin/sh
+# shift — 班次运行器 + **输出契约的机器强制**
+#
+#   用法: bin/shift think|reflect|evolve|build|watch
+#
+# 它做三件事:
+#   1. 班前快照 (ledger / journal / git HEAD)
+#   2. 跑 `claude -p <shifts/NAME.md>`
+#   3. **班后验证契约** —— 不达标 = FAILED_SHIFT, 记录在案
+#
+# 这是整个系统的心脏: 把"动机"从**模型的善意**搬到 **harness 的强制**。
+# 一个"什么都不做就无法交差"的循环, 才会长出驱动力。
+#
+# 血训 (来自一个真实的 agent 项目):
+#   - LLM 定时任务走 launchd/systemd, 别走 crontab (Keychain 拿不到凭据, 静默失败)
+#   - prompt 放文件用 PROMPT=$(cat 文件) —— **禁用 "$(cat <<'HEREDOC'…)"** (sh 下 bad substitution 秒退)
+#   - claude -p 必须 < /dev/null (无 tty 会等 stdin 挂死, 堵死 no-overlap)
+
+set -u
+
+SHIFT="${1:-}"
+[ -z "$SHIFT" ] && { echo "用法: bin/shift think|reflect|evolve|build|watch"; exit 2; }
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+cd "$ROOT" || exit 1
+
+PROMPT_FILE="shifts/${SHIFT}.md"
+[ -f "$PROMPT_FILE" ] || { echo "无此班次: $PROMPT_FILE"; exit 2; }
+
+PY="${FOUNDER_PYTHON:-python3}"
+LOG="state/shifts.log"
+FAILLOG="state/failed_shifts.log"
+LOCK="state/.${SHIFT}.lock"
+mkdir -p state
+
+# --- 并发锁 (90 分钟自动过期) ---
+if [ -f "$LOCK" ]; then
+  NOW=$(date +%s)
+  MTIME=$(stat -f %m "$LOCK" 2>/dev/null || stat -c %Y "$LOCK" 2>/dev/null || echo 0)
+  if [ $((NOW - MTIME)) -lt 5400 ]; then
+    echo "$(date -u +%FT%TZ) [$SHIFT] SKIP — 上一班仍在跑" >> "$LOG"
+    exit 0
+  fi
+fi
+touch "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
+
+# --- 1. 班前快照 ---
+BEFORE=$($PY src/contract.py snapshot)
+B_LEDGER=$(echo "$BEFORE" | awk '{print $1}')
+B_JOURNAL=$(echo "$BEFORE" | awk '{print $2}')
+B_HEAD=$(echo "$BEFORE" | awk '{print $3}')
+
+echo "$(date -u +%FT%TZ) [$SHIFT] === 开班 ===" >> "$LOG"
+
+# --- 2. 跑班 ---
+PROMPT=$(cat "$PROMPT_FILE")
+claude -p "$PROMPT" --permission-mode acceptEdits --max-turns 60 < /dev/null >> "$LOG" 2>&1
+CLAUDE_RC=$?
+
+# --- 3. 验证契约 (机器强制, 不靠模型自觉) ---
+MSG=$($PY src/contract.py verify "$SHIFT" "$B_LEDGER" "$B_JOURNAL" "$B_HEAD")
+CONTRACT_RC=$?
+
+if [ $CONTRACT_RC -eq 0 ]; then
+  echo "$(date -u +%FT%TZ) [$SHIFT] PASS — $MSG" >> "$LOG"
+  exit 0
+else
+  echo "$(date -u +%FT%TZ) [$SHIFT] FAILED_SHIFT — $MSG" >> "$LOG"
+  echo "$(date -u +%FT%TZ) [$SHIFT] $MSG" >> "$FAILLOG"
+  echo "FAILED_SHIFT [$SHIFT]: $MSG" >&2
+  exit 1
+fi
