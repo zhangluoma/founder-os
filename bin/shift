@@ -28,6 +28,9 @@ PROMPT_FILE="shifts/${SHIFT}.md"
 [ -f "$PROMPT_FILE" ] || { echo "无此班次: $PROMPT_FILE"; exit 2; }
 
 PY="${FOUNDER_PYTHON:-python3}"
+# 赛道 (被驱动的真实项目) — 从宪法读, agent 改不了
+FOUNDER_TARGET=$(grep -m1 "^FOUNDER_TARGET=" constitution/GOAL.md | cut -d= -f2- | tr -d " ")
+export FOUNDER_TARGET
 LOG="state/shifts.log"
 FAILLOG="state/failed_shifts.log"
 LOCK="state/.${SHIFT}.lock"

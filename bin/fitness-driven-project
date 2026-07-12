@@ -1,0 +1,55 @@
+#!/bin/sh
+# 适应度桥 — 从**被驱动的项目**里拉不可伪造的 ground truth。
+#
+# 这是自举的核心:
+#   founder-os 是**车**。被驱动的项目是**赛道**。**圈速骗不了人。**
+#
+# 为什么不能测"努力" (proactive / motivation / 卖力):
+#   那些全是**可伪造的输入指标** —— agent 能刷想法数、刷 commit、写漂亮 journal。
+#   (亲证的病例: 建了 11 个数据采集器、跑了 3 轮研究、日报天天好看、**真产出 = 0**。)
+#   **别测卖力, 测结果。** 卖力只在能变成结果时才有价值。
+#
+# 输出两个不可伪造的数 (一快一慢):
+#   SHIPPED  — 过了前向验证门的真产出 (需要真实市场数据 + 事前写死的门, 伪造不了)。**快**
+#   MONEY    — 真钱净值 (交易所 API 拉的)。**慢** —— 短期被市场 beta 污染, canary 窗口须 ≥30 天
+#
+# 主适应度 = MONEY (最终的、无可辩驳的检验: 钱有没有赚到)
+# 领先信号 = SHIPPED (结构性产出, beta 污染不了)
+
+set -u
+TARGET="${FOUNDER_TARGET:-/Users/luomazhang/ClaudWorkspace/trading}"
+[ -d "$TARGET" ] || { echo "0"; exit 1; }
+
+PY="$TARGET/.venv/bin/python"
+[ -x "$PY" ] || PY=python3
+
+"$PY" - "$TARGET" <<'PYEOF'
+import json, sqlite3, sys
+from pathlib import Path
+
+T = Path(sys.argv[1])
+
+# --- MONEY: 真钱净值 (交易所 API 记录, agent 伪造不了) ---
+money = 0.0
+try:
+    c = sqlite3.connect(T / "data" / "oil_indicators.db")
+    r = c.execute("SELECT value FROM indicators WHERE indicator='networth_usd' "
+                  "ORDER BY period_date DESC LIMIT 1").fetchone()
+    c.close()
+    money = float(r[0]) if r else 0.0
+except Exception:
+    pass
+
+# --- SHIPPED: 过了前向门的真产出 (28天真实数据 + 事前写死的门, 伪造不了) ---
+shipped = 0
+try:
+    reg = json.loads((T / "data" / "strategy_registry.json").read_text())
+    shipped = sum(1 for v in reg.values()
+                  if isinstance(v, dict) and str(v.get("status", "")).startswith("live"))
+except Exception:
+    pass
+
+# 主适应度 = MONEY (钱有没有赚到 — 最终检验)。SHIPPED 作领先信号打印, 供进化班读。
+print(f"SHIPPED={shipped}")
+print(f"MONEY={money:.2f}")
+PYEOF
