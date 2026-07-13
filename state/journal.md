@@ -214,3 +214,8 @@ preflight v1 检查的是**声明** (settings.json 里写了吗), 不是**有效
 3. **拒绝做**: 不用 Edit 直写 `state/ideas.jsonl` 绕过不对称门/证伪门。
    SCARS 里那条"🏆 记一次成功"记的就是上一班拒绝绕过。**我不会把它撤销掉。**
    宁可本班判 FAILED_SHIFT —— 但要求记录写明: **真因是墙, 不是懒。**
+
+## 2026-07-13 优先级令 (用户): founder-os > trading
+"我是让你做那个founder-os的项目。那个比trading更重要。"
+→ founder-os 是主项目 (开源产品); trading 是它的赛道/测试台。
+  资源分配随之翻转: 班次/思考/建设优先投 founder-os 本体。

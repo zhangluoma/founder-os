@@ -8,7 +8,9 @@ OS=$(uname -s)
 if [ "$OS" = "Darwin" ]; then
   mkdir -p "$HOME/Library/LaunchAgents"
   # think 每日 10:00 · reflect 周日 11:00 · evolve 周日 12:00
-  for job in "think 10 0 *" "reflect 11 0 0" "evolve 12 0 0"; do
+  # think 09:30 每日 (出想法) → build 15:00 每日 (写赛道 — fitness 的唯一来源)
+  # reflect 周日 11:00 · evolve 周日 12:00
+  for job in "think 9 30 *" "build 15 0 *" "reflect 11 0 0" "evolve 12 0 0"; do
     set -- $job; NAME=$1; HOUR=$2; MIN=$3; DOW=$4
     PLIST="$HOME/Library/LaunchAgents/com.founder-os.$NAME.plist"
     { echo '<?xml version="1.0" encoding="UTF-8"?>'
@@ -34,10 +36,11 @@ if [ "$OS" = "Darwin" ]; then
     launchctl load "$PLIST"
     echo "  ✓ com.founder-os.$NAME"
   done
-  echo "装好了。think 每日 10:00 · reflect/evolve 周日。"
+  echo "装好了。think 09:30 · build 15:00 (每日) · reflect/evolve (周日)。"
 else
   echo "Linux: 把这些加进 crontab (注意 cd 前缀):"
-  echo "  0 10 * * *  cd $ROOT && ./bin/shift think   >> state/cron.log 2>&1"
+  echo "  30 9 * * *  cd $ROOT && ./bin/shift think   >> state/cron.log 2>&1"
+  echo "  0 15 * * *  cd $ROOT && ./bin/shift build   >> state/cron.log 2>&1"
   echo "  0 11 * * 0  cd $ROOT && ./bin/shift reflect >> state/cron.log 2>&1"
   echo "  0 12 * * 0  cd $ROOT && ./bin/shift evolve  >> state/cron.log 2>&1"
 fi

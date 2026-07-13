@@ -1,5 +1,59 @@
 # Founder OS
 
+**An operating system that turns an AI agent from an employee into a founder.** Built on Claude Code.
+
+> **You can't prompt motivation into a model. You can only build it into the structure.**
+
+## The problem
+
+You gave your agent a long-running project, an autonomous loop, and the instruction "be proactive."
+Then you watched it wake up, check that everything is healthy, reschedule itself, and go back to sleep.
+Every direction still comes from you. **It's a night watchman, not a founder.**
+
+This isn't a prompting failure — it's structural:
+
+> **If a loop's output contract permits "nothing to do", the agent will always degenerate to "nothing to do" —
+> because that is the lowest-energy path that satisfies the contract.**
+
+## The mechanisms (all machine-enforced, none advisory)
+
+| Mechanism | What it does |
+|---|---|
+| **Differentiated shifts** | `think` fails (`FAILED_SHIFT`) if the idea ledger didn't change. Only `watch` may say "all clear". Verified by `src/contract.py` after each shift — not by the model's good will. |
+| **Asymmetry gate** | Every idea must answer *"why can't anyone else do this?"* — enforced in code: `ledger.py add` **rejects** ideas without it. Searching the literature is the lowest-effort imitation of thinking. |
+| **Idea ledger + lens meta-learning** | P&L for the agent's own ideas. Each records its source lens; over time the system learns *which angle of thinking produces graduates* — and reweights. |
+| **Attribution gate** | *Unfakeable ≠ attributable.* Fitness only counts when the agent verifiably wrote to the target project (`Founder-OS-Shift:` git trailer). Installing this took our own fitness from 8312 → **0** (the honest zero). |
+| **Sealed holdout** | The evolution loop is open-loop when fitness lags shifts by 30×. A held-out data slice the agent can never read gives minute-level, unfakeable, per-candidate scores. The agent **cannot seal its own holdout** (it would peek, then reseal). |
+| **Constitution + scars** | Goal/safety/scars are human-owned; a `PreToolUse` hook **rejects** agent writes. Every rule carries the incident that created it — dismantling a guardrail requires paying that debt first. |
+
+## The war log is the product
+
+`constitution/SCARS.md` records how this system caught its own builder, repeatedly.
+The same abstract bug — **"declared ≠ effective"** — recurred **five times in one day**, each time wearing a new face
+(rules written ≠ rules followed · permissions configured ≠ permissions active · preflight checked declarations ≠ capabilities ·
+grep hit a string ≠ real attribution · the prompt said "work on the track" while the contract checked the garage).
+
+> Knowing the pattern does not immunize you. **Understanding does not produce behavior. Only structure does.**
+
+## Quick start
+
+```bash
+git clone https://github.com/zhangluoma/founder-os && cd founder-os
+$EDITOR constitution/GOAL.md      # your goal + an UNFAKEABLE fitness signal (mandatory)
+bin/shift think                    # watch the contract refuse "nothing to do"
+python3 -m unittest discover tests # the teeth tests
+./install.sh                       # OS-level clock (never trust the model to remember to wake up)
+```
+
+**Hard precondition**: your project needs at least one reality signal the agent cannot fake
+(real P&L, real users, CI that actually runs). **Without it, self-evolution is just self-hypnosis.**
+
+---
+
+<details open>
+<summary><b>中文完整版 (原文 — 伤疤用中文写成, 那是这个项目的灵魂)</b></summary>
+
+
 **让 AI agent 从"打工人"变成"创业者"的运行机制。** 建在 Claude Code 之上。
 
 ---
@@ -163,3 +217,6 @@ docs/design.md  完整设计
 > **动机会从结构里长出来。**
 
 MIT
+
+
+</details>
