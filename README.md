@@ -20,6 +20,7 @@ This isn't a prompting failure — it's structural:
 | Mechanism | What it does |
 |---|---|
 | **Differentiated shifts** | `think` fails (`FAILED_SHIFT`) if the idea ledger didn't change. Only `watch` may say "all clear". Verified by `src/contract.py` after each shift — not by the model's good will. |
+| **The thinking tax** | Making `think` a *scheduled shift* structurally declares that **every other shift may skip thinking** — and a scheduled thought is the definition of an employee's thought. So: **every shift but `watch` must leave a delta in the idea ledger.** You did the work but learned nothing → `FAILED_SHIFT`. The model doesn't exist between turns, so "always be thinking" can't be willed — it can only be taxed. *(User, on being told when the next think shift was scheduled: "I shouldn't have to tell you — you should always be thinking.")* |
 | **Asymmetry gate** | Every idea must answer *"why can't anyone else do this?"* — enforced in code: `ledger.py add` **rejects** ideas without it. Searching the literature is the lowest-effort imitation of thinking. |
 | **Idea ledger + lens meta-learning** | P&L for the agent's own ideas. Each records its source lens; over time the system learns *which angle of thinking produces graduates* — and reweights. |
 | **Attribution gate** | *Unfakeable ≠ attributable.* Fitness only counts when the agent verifiably wrote to the target project (`Founder-OS-Shift:` git trailer). Installing this took our own fitness from 8312 → **0** (the honest zero). |

@@ -108,15 +108,64 @@ class ContractTeeth(unittest.TestCase):
     def test_build_fails_without_attributable_track_commit(self):
         """伤疤 #8: build 检**赛道上带 trailer 的 commit 数**, 车库 commit 不算, 别人的 commit 不算。"""
         before = contract.snapshot()
-        # 什么都没变 (track 计数不变) → 必须 FAIL
+        contract.LEDGER.write_text('{"id":1}\n{"id":2}\n')   # 先缴思考税, 隔离赛道契约
         ok, msg = contract.verify("build", before)
         self.assertFalse(ok)
         self.assertIn("可归因", msg)
 
     def test_reflect_fails_on_silent_journal(self):
         before = contract.snapshot()
-        ok, _ = contract.verify("reflect", before)
+        contract.LEDGER.write_text('{"id":1}\n{"id":2}\n')   # 先缴思考税, 隔离 journal 契约
+        ok, msg = contract.verify("reflect", before)
         self.assertFalse(ok)
+        self.assertIn("journal", msg)
+
+
+class ThinkingTax(unittest.TestCase):
+    """**思考不是一个班次, 是每一次动作的税。** (用户 2026-07-12)
+
+    验尸案由: 把 think 做成独立的、排期的班次, **在结构上等于宣布"其他所有班次都可以不思考"**。
+    而"排期的思考"就是打工人的定义 —— 想法成了任务, 不是本能。
+    (亲证: 我先给思考排了个 25 分钟后的班, 然后**等用户叫我**才想。)
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        tp = Path(self.tmp.name)
+        self._orig = (contract.LEDGER, contract.JOURNAL)
+        contract.LEDGER = tp / "ideas.jsonl"
+        contract.JOURNAL = tp / "journal.md"
+        contract.LEDGER.write_text('{"id":1}\n')
+        contract.JOURNAL.write_text("j\n")
+
+    def tearDown(self):
+        contract.LEDGER, contract.JOURNAL = self._orig
+        self.tmp.cleanup()
+
+    def test_every_shift_but_watch_pays_the_tax(self):
+        """干完活却什么都没学到 = FAILED_SHIFT。**每一个**班, 不只是 think。"""
+        before = contract.snapshot()
+        for shift in ("build", "reflect", "evolve", "think"):
+            ok, msg = contract.verify(shift, before)
+            self.assertFalse(ok, f"{shift} 班 ledger 没变却过了 —— 思考税漏了")
+            if shift != "think":
+                self.assertIn("思考税", msg, f"{shift} 班该报思考税未缴")
+
+    def test_watch_is_exempt(self):
+        """巡检班的活就是'确认无事发生' —— 唯一免税的班。"""
+        before = contract.snapshot()
+        ok, _ = contract.verify("watch", before)
+        self.assertTrue(ok)
+
+    def test_killing_an_idea_also_pays_the_tax(self):
+        """WIP 满了也交得起税: **杀掉一个想法, 和提出一个想法, 都是思考的证据。**
+
+        (契约必须**物理可满足** —— 伤疤 #4: 不可满足的契约不是压力, 是墙。)
+        """
+        before = contract.snapshot()
+        contract.LEDGER.write_text('{"id":1,"status":"killed"}\n')   # 只是杀了一个, 没提新的
+        ok, msg = contract.verify("reflect", before)
+        self.assertNotIn("思考税", msg, "杀死一个想法必须算交税")
 
 
 class AttributionGate(unittest.TestCase):

@@ -11,7 +11,26 @@
   think   : ledger 必须变化 (新想法 / 杀死 / 升级)。"无事可做" = 失败
   reflect : journal 必须新增一条, 且必须点名一个"浪费/错误"
   evolve  : 必须有 commit 改动机制层 (shifts/ 或 config), 或写下带数据的"不变"决定
-  build   : 必须有新 commit
+  build   : 赛道上必须有**可归因** commit (trailer)
+
+---
+
+**思考税** (2026-07-12, 用户一句话推翻了本文件的分类法):
+
+    "我不告诉你, 你也应该一直想啊。"
+
+  他是对的, 而错在**结构**, 不在态度:
+
+  **把 think 做成一个独立的、排期的班次, 在结构上等于宣布"其他所有班次都可以不思考"。**
+  而"排期的思考"本身就是打工人的定义: **想法成了任务, 不是本能。**
+  (亲证: 我先给思考排了个 25 分钟后的班, 然后**等他叫我**才想。两次都是同一个病。)
+
+  物理约束: 模型在两个回合之间**不存在**, 所以"一直想"不可能靠意志实现。
+  能实现的是: **让思考成为每一次动作的税** —— 你可以不思考, 但那样你就交不了差。
+
+  → **除 watch 外, 每一个班都必须留下 ledger 变化。** 不是"想法班想, 干活班干",
+    而是**干活的人必须带着一个新假设、一个死刑判决、或一次升级走出来**。
+    干完活却什么都没学到 = FAILED_SHIFT。
 """
 from __future__ import annotations
 
@@ -76,6 +95,37 @@ def snapshot() -> dict:
             "track": _track_attributed()}
 
 
+THINK_TAX_EXEMPT = {"watch"}   # 只有巡检班免税 —— 它的活就是"确认无事发生"
+
+
+def _think_tax(shift: str, before: dict, after: dict) -> tuple[bool, str] | None:
+    """**思考税**: 除 watch 外, 每一个班都必须留下 ledger 变化。
+
+    把 think 做成独立班次 = 结构上宣布"其他班可以不思考"。
+    → 改成: **干活的人必须带着一个新假设 / 一个死刑判决 / 一次升级走出来。**
+      干完活却什么都没学到 = FAILED_SHIFT。
+
+    (WIP 满了也能满足: `ledger.py set <id> --status killed` 同样是 ledger 变化 ——
+     **杀掉一个想法, 和提出一个想法, 都是思考的证据。** 契约仍然物理可满足。)
+    """
+    if shift in THINK_TAX_EXEMPT:
+        return None
+    if after["ledger"] != before["ledger"]:
+        return None
+    if shift == "think":
+        # 思考班欠税 = 它的**本职**没做 —— 保留原来那句更锋利的判词。
+        return False, ("idea ledger 无变化 —— 未提新想法, 也未杀/升级任何想法。\n"
+                       "  思考班说'无事可做' = 本班失败。那是巡检班的活, 不是你的。")
+    return False, (
+            f"**思考税未缴** —— {shift} 班结束时 idea ledger 一个字都没变。\n"
+            f"  你干了活, 但**什么都没学到**: 没提出新假设, 没杀死任何想法, 没升级任何判断。\n"
+            f"  **思考不是一个班次, 是每一次动作的税。** 把思考做成'排期的活', 等于宣布其余时间可以不想。\n"
+            f"  → 交税 (任选其一, 都是思考的证据):\n"
+            f"      python3 src/ledger.py add \"<新假设>\" --asym \"<别人为什么做不了>\" --falsify \"<怎么算它死了>\"\n"
+            f"      python3 src/ledger.py set <id> --status killed --outcome \"<死因>\"\n"
+            f"  (用户 2026-07-12: \"我不告诉你, 你也应该一直想啊。\")")
+
+
 def verify(shift: str, before: dict) -> tuple[bool, str]:
     """班后验证契约。→ (达标?, 说明)"""
     after = snapshot()
@@ -83,10 +133,12 @@ def verify(shift: str, before: dict) -> tuple[bool, str]:
     if shift == "watch":
         return True, "巡检班允许'一切正常' (唯一允许无为的班)"
 
+    # --- 思考税: 先于本班的专属契约检查 (它是**所有**班的地板, 不是某个班的天花板) ---
+    tax = _think_tax(shift, before, after)
+    if tax is not None:
+        return tax
+
     if shift == "think":
-        if after["ledger"] == before["ledger"]:
-            return False, ("idea ledger 无变化 —— 未提新想法, 也未杀/升级任何想法。\n"
-                           "  思考班说'无事可做' = 本班失败。那是巡检班的活, 不是你的。")
         return True, "ledger 已变化 (提出/杀死/升级了想法)"
 
     if shift == "reflect":
@@ -109,7 +161,8 @@ def verify(shift: str, before: dict) -> tuple[bool, str]:
                 "  赛道 commit 必须带 trailer: `Founder-OS-Shift: build`\n"
                 "  (伤疤 #8: 旧契约检 founder-os 的 HEAD → **任何人**的 commit 都能让你 PASS, 包括人类并发提交的。\n"
                 "   **不可伪造 ≠ 可归因。**)")
-        return True, f"赛道上产出可归因 commit (trailer 计数 {before['track']} → {after['track']})"
+        return True, (f"赛道上产出可归因 commit (trailer 计数 {before['track']} → {after['track']}) "
+                      f"+ 思考税已缴 (ledger 有变化)")
 
     return True, f"(未知班次 {shift}, 不设契约)"
 
