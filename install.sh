@@ -93,7 +93,15 @@ if [ "$OS" = "Darwin" ]; then
   # think 每日 10:00 · reflect 周日 11:00 · evolve 周日 12:00
   # think 09:30 每日 (出想法) → build 15:00 每日 (写赛道 — fitness 的唯一来源)
   # reflect 周日 11:00 · evolve 周日 12:00
-  for job in "think 9 30 *" "build 15 0 *" "reflect 11 0 0" "evolve 12 0 0"; do
+  # ⚠️ 伤疤 #12: 这里曾写成 `for job in "think 9 30 *" ...; set -- $job` ——
+  #    **不带引号的 $job 会让 shell 把 `*` 通配展开成当前目录的文件名**, DOW 变成一个文件名,
+  #    被写进 <integer> 标签 → **plist 语法损坏 → think/build 永远不会触发**。
+  #    而 reflect/evolve 的 DOW=0 不含 `*`, 躲过一劫 —— 于是**半个时钟在走, 看起来一切正常**。
+  #    `launchctl list` 照样列出它们、exit=0 一片绿, install.sh 照样打印"装好了"。
+  #    **产品出厂即坏, 还宣布成功** (伤疤 #10 原样复发)。
+  #    → 用 `-` 代替 `*` 表示"每日", 彻底不让通配符进入这段代码。
+  set -f                                   # 双保险: 关掉通配展开
+  for job in "think 9 30 -" "build 15 0 -" "reflect 11 0 0" "evolve 12 0 0"; do
     set -- $job; NAME=$1; HOUR=$2; MIN=$3; DOW=$4
     PLIST="$HOME/Library/LaunchAgents/com.founder-os.$NAME.plist"
     { echo '<?xml version="1.0" encoding="UTF-8"?>'
@@ -106,7 +114,7 @@ if [ "$OS" = "Darwin" ]; then
       echo "  <key>WorkingDirectory</key><string>$ROOT</string>"
       echo '  <key>StartCalendarInterval</key><dict>'
       echo "    <key>Hour</key><integer>$HOUR</integer><key>Minute</key><integer>$MIN</integer>"
-      [ "$DOW" != "*" ] && echo "    <key>Weekday</key><integer>$DOW</integer>"
+      [ "$DOW" != "-" ] && echo "    <key>Weekday</key><integer>$DOW</integer>"
       echo '  </dict>'
       echo "  <key>StandardOutPath</key><string>$ROOT/state/launchd.log</string>"
       echo "  <key>StandardErrorPath</key><string>$ROOT/state/launchd.log</string>"
@@ -115,12 +123,26 @@ if [ "$OS" = "Darwin" ]; then
       echo '  </dict>'
       echo '</dict></plist>'
     } > "$PLIST"
+    # **时钟的开箱自检** (伤疤 #12): 「装了」≠「在走」。
+    # 一个语法损坏的 plist 会被 launchctl list 列出来、exit=0、看起来完全正常 —— 而它永远不触发。
+    # 所以: **解析它, 并确认它真的有触发器。** 拿不准就拒绝, 别宣布成功。
+    if ! plutil -lint "$PLIST" >/dev/null 2>&1; then
+      echo "  ✗ com.founder-os.$NAME 的 plist **语法损坏** —— 它会被加载、显示正常、**但永远不触发**。"
+      echo "    拒绝安装。(一个不会响的闹钟比没有闹钟更糟: 它让你以为你会被叫醒。)"
+      set +f; exit 1
+    fi
+    if ! plutil -extract StartCalendarInterval.Hour raw "$PLIST" >/dev/null 2>&1; then
+      echo "  ✗ com.founder-os.$NAME **没有触发器** (StartCalendarInterval 缺失) —— 它永远不会自己醒。"
+      set +f; exit 1
+    fi
     launchctl unload "$PLIST" 2>/dev/null || true
-    launchctl load "$PLIST"
-    echo "  ✓ com.founder-os.$NAME"
+    launchctl load "$PLIST" || { echo "  ✗ launchctl load 失败"; set +f; exit 1; }
+    WHEN=$([ "$DOW" = "-" ] && echo "每日" || echo "周日")
+    echo "  ✓ com.founder-os.$NAME  ($WHEN $HOUR:$(printf %02d "$MIN"))  [plist 已验: 语法 OK + 有触发器]"
   done
+  set +f
   echo ""
-  echo "装好了。think 09:30 · build 15:00 (每日) · reflect/evolve (周日)。"
+  echo "装好了 —— 而且**验过它们真的会响** (不是只验了'文件写出来了')。"
   echo ""
   echo "⚠️  **时钟是给'你不在'时的兜底 —— 不是给'你在'时的借口。** (伤疤 #9)"
   echo "    你在的时候, 手动跑: bin/shift think"
