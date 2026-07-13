@@ -10,3 +10,4 @@ state/ideas.jsonl
 state/journal.md
 state/fitness.jsonl
 state/holdout_seal.json
+.claude/settings.local.json

@@ -24,14 +24,21 @@ This isn't a prompting failure — it's structural:
 | **Idea ledger + lens meta-learning** | P&L for the agent's own ideas. Each records its source lens; over time the system learns *which angle of thinking produces graduates* — and reweights. |
 | **Attribution gate** | *Unfakeable ≠ attributable.* Fitness only counts when the agent verifiably wrote to the target project (`Founder-OS-Shift:` git trailer). Installing this took our own fitness from 8312 → **0** (the honest zero). |
 | **Sealed holdout** | The evolution loop is open-loop when fitness lags shifts by 30×. A held-out data slice the agent can never read gives minute-level, unfakeable, per-candidate scores. The agent **cannot seal its own holdout** (it would peek, then reseal). |
-| **Constitution + scars** | Goal/safety/scars are human-owned; a `PreToolUse` hook **rejects** agent writes. Every rule carries the incident that created it — dismantling a guardrail requires paying that debt first. |
+| **Walls ledger (WALL ≠ LAZY)** | An agent blocked by a missing permission is **silenced, not lazy** — but `FAILED_SHIFT` records both identically, so the system escalates pressure while the wall stands forever. Walls are now registered machine-readably (prose in a journal is never read — proven), each with a **copy-pasteable one-line fix**, and shouted at the top of every shift until a human tears it down. **The agent may register a wall; only a human may tear it down.** |
+| **Constitution + scars** | Goal/safety/scars — **and the permission layer** — are human-owned; a `PreToolUse` hook **rejects** agent writes. (An agent that can edit its own `settings.json` grants itself `Bash(:*)`, and then every gate — including that hook — is made of paper.) Every rule carries the incident that created it. |
 
 ## The war log is the product
 
 `constitution/SCARS.md` records how this system caught its own builder, repeatedly.
-The same abstract bug — **"declared ≠ effective"** — recurred **five times in one day**, each time wearing a new face
+The same abstract bug — **"declared ≠ effective"** — has recurred **eight times**, each time wearing a new face
 (rules written ≠ rules followed · permissions configured ≠ permissions active · preflight checked declarations ≠ capabilities ·
-grep hit a string ≠ real attribution · the prompt said "work on the track" while the contract checked the garage).
+grep hit a string ≠ real attribution · the prompt said "work on the track" while the contract checked the garage ·
+attributable ≠ contributing · the installer succeeded ≠ the system runs · **a permission was in the allow-list ≠ it matched any command you'd actually run**).
+
+The last one is the sharpest. An agent hit the same permission wall 4 times; each time the fix — one line — went into a journal no human read.
+I finally "fixed" it, copying the agent's absolute path as a *relative* one — which can never match, because the shift's cwd is the garage, not the track.
+The wall stood. The config said *allowed*. The ledger said *resolved*. **Three layers green, all of them lying.**
+When that wall finally came down, the 19KB script it had been blocking ran for the first time — and proved that the graduation gate guarding our **live money** is a sieve.
 
 > Knowing the pattern does not immunize you. **Understanding does not produce behavior. Only structure does.**
 

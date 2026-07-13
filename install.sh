@@ -42,6 +42,38 @@ sys.exit(0 if p.get('$ROOT',{}).get('hasTrustDialogAccepted') is True else 1)
   exit 1
 fi
 
+# 2.5 赛道权限 —— **从宪法自动生成, 不让人手抄** (伤疤 #11)
+#
+# 为什么这一步必须是**生成的**, 不能是文档里的一段"请照抄":
+#   赛道路径是**每个实例都不同的绝对路径**。产品无法预置它, 于是它落到人手上 ——
+#   而人**照抄时把绝对路径写成了相对路径**。那条 allow 写进了配置、看起来完全合理、
+#   **永远匹配不上任何真实命令**。墙立着, 配置却显示"已放行"。
+#   agent 撞了它 4 次, 每次都被记成 FAILED_SHIFT (= "它偷懒了")。
+#
+#   **凡是要人照抄的配置, 就一定会被抄错。能生成的, 绝不让人抄。**
+TARGET=$(sed -n 's/^FOUNDER_TARGET=//p' "$ROOT/constitution/GOAL.local.md" | head -1)
+python3 - "$ROOT" "$TARGET" <<'PY' || exit 1
+import json, pathlib, sys
+root, tgt = pathlib.Path(sys.argv[1]), sys.argv[2]
+if not tgt or not pathlib.Path(tgt).is_dir():
+    print(f"  ✗ FOUNDER_TARGET 无效: '{tgt}' —— 赛道不存在, 拒绝安装"); sys.exit(1)
+py = f"{tgt}/.venv/bin/python"
+if not pathlib.Path(py).exists():
+    py = "python3"
+p = root / ".claude" / "settings.local.json"
+d = json.loads(p.read_text()) if p.exists() else {}
+perms = d.setdefault("permissions", {})
+allow = perms.setdefault("allow", [])
+for e in (f"Bash({py}:*)", f"Bash(git -C {tgt}:*)", f"Bash(cd {tgt}:*)"):
+    if e not in allow:
+        allow.append(e)
+dirs = perms.setdefault("additionalDirectories", [])
+if tgt not in dirs:
+    dirs.append(tgt)
+p.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+print(f"  ✓ 赛道权限已生成 → {p.name} (赛道: {tgt})")
+PY
+
 # 3. 契约的牙齿还在吗?
 python3 -m unittest discover "$ROOT/tests" >/dev/null 2>&1 \
   && echo "  ✓ 牙齿测试全绿" \

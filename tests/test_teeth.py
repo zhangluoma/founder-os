@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -224,6 +225,96 @@ class BaselineDifferencing(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             fitness_bridge.compute(8312.22, 3, anchor="abc123", fresh=True,
                                    base_money=None, base_shipped=None)
+
+
+class WallsLedger(unittest.TestCase):
+    """墙账本 (idea #7) — **WALL ≠ LAZY**。
+
+    验尸案由: 一堵权限墙被撞了 3 次, 解封动作 (一行配置) 每次都写进 journal 散文,
+    **人一次没读**。它挡住的装置在解封后的第一次运行, 就打穿了实盘策略的毕业证据。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        import walls
+        self.w = walls
+        self._orig = walls.WALLS
+        walls.WALLS = Path(self.tmp.name) / "walls.jsonl"
+
+    def tearDown(self):
+        self.w.WALLS = self._orig
+        self.tmp.cleanup()
+
+    def _ns(self, **kw):
+        base = {"wall": "w", "fix": "一行解法", "blocked": "某产出",
+                "shift": "think", "note": None}
+        base.update(kw)
+        return type("A", (), base)()
+
+    def test_new_wall_without_a_one_line_fix_is_rejected(self):
+        """没有解法的墙, 对人来说只是一句抱怨 —— 而抱怨会被跳过。"""
+        with self.assertRaises(SystemExit):
+            self.w.hit(self._ns(fix=None))
+        self.assertEqual(self.w.standing(), [])
+
+    def test_rehitting_the_same_wall_raises_its_priority(self):
+        """撞击次数 = 优先级。第 4 次撞同一堵墙, 必须比第 1 次更响。"""
+        self.w.hit(self._ns())
+        self.w.hit(self._ns(fix=None, note="又撞了"))   # 老墙无需再给 fix
+        self.assertEqual(len(self.w.standing()), 1, "同一堵墙不该开出第二行")
+        self.assertEqual(self.w.standing()[0]["hits"], 2)
+        self.assertEqual(len(self.w.standing()[0]["hit_log"]), 2, "每次撞击都要留证")
+
+    def test_agent_cannot_declare_a_wall_torn_down(self):
+        """agent 自己宣布'墙拆了' = 自己给自己发赦免: 墙还立着, 账本却说没事了。
+
+        (亲证: 账本上线第一天, 就有人把一堵**没拆的**墙标成了 torn_down。)
+        """
+        self.w.hit(self._ns())
+        os.environ.pop("FOUNDER_HUMAN", None)
+        with self.assertRaises(SystemExit):
+            self.w.down(type("A", (), {"id": 1})())
+        self.assertEqual(len(self.w.standing()), 1, "墙必须还立着")
+
+
+class PermissionsActuallyMatch(unittest.TestCase):
+    """**权限写了 ≠ 权限能匹配到你真要跑的命令。** (「声明≠有效」的第 8 张脸)
+
+    验尸案由: 人照着 agent 的解封提示加权限, 但把绝对路径顺手写成了相对路径:
+        "Bash(./.venv/bin/python research/:*)"
+    它写进了配置、看起来完全合理、**而班次的 cwd 是 founder-os** —— 那里既没有 .venv
+    也没有 research/。这条 allow **永远匹配不上任何真实命令**。
+    墙还立着, 配置却显示"已放行", 而账本被标成了"已解决"。
+    """
+
+    def setUp(self):
+        import preflight
+        self.p = preflight
+
+    def test_relative_allow_does_not_cover_the_absolute_track_command(self):
+        """就是那个 bug 本身。"""
+        allow = ["Bash(./.venv/bin/python research/:*)", "Bash(python3 research/:*)"]
+        cmd = "/Users/x/trading/.venv/bin/python research/foo.py"
+        self.assertFalse(self.p._covers(cmd, allow),
+                         "相对路径的 allow 绝不允许再被当成'已放行'")
+
+    def test_absolute_allow_covers_it(self):
+        allow = ["Bash(/Users/x/trading/.venv/bin/python:*)"]
+        self.assertTrue(self.p._covers("/Users/x/trading/.venv/bin/python research/foo.py", allow))
+
+    def test_garage_git_does_not_cover_track_git(self):
+        """伤疤 #8 在权限层: 班次 cwd = 车库, 裸 `git commit` 提交的是**车库**。
+
+        而 build 契约要的是**赛道上带 trailer 的 commit**。两者永远对不上。
+        """
+        self.assertFalse(self.p._covers("git -C /Users/x/trading commit", ["Bash(git commit:*)"]))
+        self.assertTrue(self.p._covers("git -C /Users/x/trading commit",
+                                       ["Bash(git -C /Users/x/trading:*)"]))
+
+    def test_exact_form_is_not_a_prefix(self):
+        """`Bash(X)` 是精确匹配, 不是前缀 —— 别把它当成放行了一族命令。"""
+        self.assertTrue(self.p._covers("git status", ["Bash(git status)"]))
+        self.assertFalse(self.p._covers("git status -s", ["Bash(git status)"]))
 
 
 if __name__ == "__main__":

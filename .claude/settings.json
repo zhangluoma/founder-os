@@ -24,9 +24,7 @@
       "Bash(echo:*)",
       "Read",
       "Grep",
-      "Glob",
-      "Bash(./.venv/bin/python research/:*)",
-      "Bash(python3 research/:*)"
+      "Glob"
     ]
   },
   "hooks": {

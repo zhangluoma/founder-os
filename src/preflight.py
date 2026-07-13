@@ -44,6 +44,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = ROOT / ".claude" / "settings.json"
+LOCAL_SETTINGS = ROOT / ".claude" / "settings.local.json"   # 实例专属 (赛道绝对路径, 不进产品)
 GLOBAL_CFG = Path(os.path.expanduser("~/.claude.json"))
 
 # 各班要满足契约, 必须能跑的东西
@@ -54,6 +55,100 @@ NEEDS: dict[str, list[str]] = {
     "build":   ["Bash(git commit"],                                  # 必须能 commit
     "watch":   [],                                                   # 无产出契约
 }
+
+# **契约指着赛道的班次** —— 它们的权限必须也指着赛道 (门 3)
+TRACK_SHIFTS = {"build"}
+
+
+def _allow() -> list[str]:
+    """合并后的 allowlist (settings.json = 产品默认, settings.local.json = 本实例)。"""
+    out: list[str] = []
+    for f in (SETTINGS, LOCAL_SETTINGS):
+        if f.exists():
+            try:
+                out += json.loads(f.read_text()).get("permissions", {}).get("allow", [])
+            except Exception:
+                pass
+    return out
+
+
+def _extra_dirs() -> list[str]:
+    out: list[str] = []
+    for f in (SETTINGS, LOCAL_SETTINGS):
+        if f.exists():
+            try:
+                out += json.loads(f.read_text()).get("permissions", {}).get(
+                    "additionalDirectories", [])
+            except Exception:
+                pass
+    return out
+
+
+def _covers(cmd: str, allow: list[str]) -> bool:
+    """**模拟 Claude Code 的前缀匹配**: `Bash(X:*)` 覆盖任何以 X 开头的命令。
+
+    这道模拟是本文件最贵的一行, 因为它咬住的是一个**已经发生过的**错误:
+    人照着 agent 的解封提示加权限, 但把绝对路径写成了相对路径 ——
+    `Bash(./.venv/bin/python research/:*)`。它写进了配置、看起来完全合理、
+    **而班次的 cwd 是 founder-os**, 那里既没有 .venv 也没有 research/。
+    → 这条 allow **永远匹配不上任何真实命令**。墙立着, 配置却显示"已放行"。
+
+    「声明 ≠ 有效」的又一张脸: **权限写了 ≠ 权限能匹配到你真要跑的命令。**
+    所以别检查"写了没", 检查"**拿真实命令去撞, 撞得开吗**"。
+    """
+    for a in allow:
+        if not (a.startswith("Bash(") and a.endswith(")")):
+            continue
+        pat = a[5:-1]
+        if pat.endswith(":*"):
+            if cmd.startswith(pat[:-2]):
+                return True
+        elif cmd == pat:
+            return True
+    return False
+
+
+def _track_capable(shift: str) -> tuple[bool, str]:
+    """赛道班的权限, 真的指着赛道吗? (门 3)
+
+    伤疤 #8 在权限层的同构复发: **契约指着赛道, 权限门检的却是车库。**
+    班次 cwd = founder-os, 所以裸 `git commit` 提交的是**车库**;
+    而 build 的契约要的是**赛道上带 trailer 的 commit**。两者永远对不上。
+    """
+    goal = ROOT / "constitution" / "GOAL.local.md"
+    if not goal.exists():
+        goal = ROOT / "constitution" / "GOAL.md"
+    tgt = ""
+    for line in goal.read_text().splitlines():
+        if line.startswith("FOUNDER_TARGET="):
+            tgt = line.split("=", 1)[1].strip()
+    if not tgt or not Path(tgt).is_dir():
+        return False, f"赛道路径无效: '{tgt}' (填 constitution/GOAL.local.md 的 FOUNDER_TARGET)"
+
+    allow = _allow()
+    py = f"{tgt}/.venv/bin/python"
+    if not Path(py).exists():
+        py = "python3"
+    # 拿**真实命令**去撞权限层 —— 不是问"配置里写了吗"
+    probes = {
+        f"git -C {tgt} commit": "在赛道上提交 (build 契约的唯一交付物)",
+        py:                     "跑赛道的代码 (验证你的改动没把赛道弄坏)",
+    }
+    missing = {c: w for c, w in probes.items() if not _covers(c, allow)}
+    if missing:
+        lines = "\n".join(f"      · `{c}`  ← {w}" for c, w in missing.items())
+        adds = "\n".join(f'        "Bash({c}:*)",' for c in missing)
+        return False, (
+            f"**赛道班的权限没指着赛道** —— 以下真实命令**撞不开**权限层:\n{lines}\n"
+            f"  班次 cwd = {ROOT} (车库)。裸 `git commit` 提交的是**车库**, 而 build 契约要的是**赛道**。\n"
+            f"  ⚠️ 注意: 相对路径形式的 allow 在这里**永远匹配不上** —— 必须是绝对路径。\n"
+            f"  → 加进 .claude/settings.local.json 的 permissions.allow:\n{adds}\n"
+            f"     并把 \"{tgt}\" 加进 permissions.additionalDirectories")
+
+    if tgt not in _extra_dirs():
+        return False, (f"赛道 {tgt} 不在 permissions.additionalDirectories —— "
+                       f"agent 读得到赛道却**写不了**赛道, build 契约不可满足。")
+    return True, f"赛道权限已验 (真实命令能撞开: git -C {tgt} …, {py})"
 
 
 def _trusted() -> tuple[bool, str]:
@@ -102,11 +197,7 @@ def check(shift: str) -> tuple[bool, str]:
     # --- 门 2: 声明 (伤疤 #4) —— 权限会生效了, 那它写了吗? ---
     if not SETTINGS.exists():
         return False, f".claude/settings.json 不存在 —— {shift} 班需要 {needs} 却无授权"
-    try:
-        allow = json.loads(SETTINGS.read_text()).get("permissions", {}).get("allow", [])
-    except Exception as e:
-        return False, f"settings.json 读不了: {e}"
-
+    allow = _allow()
     missing = [n for n in needs
                if not any(a.startswith(n) or n.startswith(a.rstrip(":*")) for a in allow)]
     if missing:
@@ -115,10 +206,28 @@ def check(shift: str) -> tuple[bool, str]:
             f"  伤疤 #4: **不可满足的契约不是压力, 是墙。** agent 撞墙后会退化成打工人 (伸手要权限)。\n"
             f"  → 要么放行工具, 要么改契约。**别让它撞墙。**")
 
+    # --- 门 3: 赛道 (伤疤 #8 在权限层的复发) —— 契约指着赛道, 权限也指着赛道吗? ---
+    if shift in TRACK_SHIFTS:
+        ok, why = _track_capable(shift)
+        if not ok:
+            return False, why + "\n  **拒绝开班。** 让它撞一堵你能修的墙, 好过记它一笔它没犯的懒。"
+        return True, f"契约可满足 (已信任 + 已放行 + {why})"
+
     return True, f"契约可满足 (已信任 + 已放行: {needs})"
 
 
 if __name__ == "__main__":
+    # **每次开班都响亮展示未拆的墙** (idea #7)。
+    # 写进 journal 让人去读 = 死路 (已证: 一行权限挡了三次, 人一次没读)。
+    # 系统入口是人唯一必看的地方 —— 墙必须堵在这里喊。
+    try:
+        sys.path.insert(0, str(ROOT / "src"))
+        import walls
+        if walls.standing():
+            walls.show()
+    except Exception:
+        pass
+
     ok, msg = check(sys.argv[1] if len(sys.argv) > 1 else "")
     print(msg)
     sys.exit(0 if ok else 1)

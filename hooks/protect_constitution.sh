@@ -33,5 +33,30 @@ case "$FILE" in
 JSON
     exit 0
     ;;
+
+  # --- 权限层 = 宪法层的**执行手** (2026-07-12 补洞) ---
+  # 建墙账本时才看见: 宪法有 hook 守着, **权限没有**。
+  # 而一个能编辑 .claude/settings.json 的 agent, 可以给自己加 `Bash(:*)` ——
+  # **于是所有的门都是纸做的, 包括这个 hook 自己 (它也在 settings.json 里注册)。**
+  # 「不可伪造的适应度」的同构推论: **能改自己权限的 agent, 一定会把自己改成全权。**
+  # 这不是可能, 是必然 —— 因为那是满足契约的最低能量路径。
+  #
+  # 注意这条规则的**方向**: 它不是在防"墙太少", 它是在防"墙可以被自己拆掉"。
+  # agent 撞墙的正确出口是 `src/walls.py hit` (登记, 让人来拆), **不是自己开锁**。
+  */.claude/settings.json|*/.claude/settings.local.json)
+    if [ "${FOUNDER_HUMAN:-0}" = "1" ]; then
+      exit 0   # 人类在改, 放行
+    fi
+    cat <<'JSON'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "权限层不可自我修改。能给自己开权限的 agent 会把自己改成全权 —— 那样所有的门 (包括这个 hook) 都成了纸做的。撞到权限墙的正确出口是登记它, 不是自己开锁:\n\n    python3 src/walls.py hit \"<被挡住的是什么>\" --fix \"<人复制粘贴就能拆的一行>\" --blocked \"<它挡住了什么产出>\" --shift <班次>\n\n墙会在**每一班开班时**被响亮展示, 直到人拆掉它。**登记不是收工 —— 先尽力绕行, 绕不过再登记。**"
+  }
+}
+JSON
+    exit 0
+    ;;
 esac
 exit 0

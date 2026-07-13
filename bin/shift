@@ -78,8 +78,18 @@ if [ $CONTRACT_RC -eq 0 ]; then
   echo "$(date -u +%FT%TZ) [$SHIFT] PASS — $MSG" >> "$LOG"
   exit 0
 else
-  echo "$(date -u +%FT%TZ) [$SHIFT] FAILED_SHIFT — $MSG" >> "$LOG"
-  echo "$(date -u +%FT%TZ) [$SHIFT] $MSG" >> "$FAILLOG"
-  echo "FAILED_SHIFT [$SHIFT]: $MSG" >&2
+  # **WALL ≠ LAZY** (idea #7): 把"我被封口了"记成"我偷懒了", 系统会朝**加压**方向走, **而墙永远不被修**。
+  WALLS_STANDING=$($PY -c "import sys;sys.path.insert(0,'src');import walls;print(len(walls.standing()))" 2>/dev/null || echo 0)
+  if [ "$WALLS_STANDING" -gt 0 ]; then
+    KIND="FAILED_SHIFT/WALL"
+    echo "$(date -u +%FT%TZ) [$SHIFT] $KIND — 有 $WALLS_STANDING 堵未拆的墙。**这可能不是懒, 是被封口。**" >> "$LOG"
+    echo "$(date -u +%FT%TZ) [$SHIFT] $KIND (walls=$WALLS_STANDING) — $MSG" >> "$FAILLOG"
+    $PY -c "import sys;sys.path.insert(0,'src');import walls;walls.show()" 2>/dev/null >&2
+  else
+    KIND="FAILED_SHIFT/LAZY"
+    echo "$(date -u +%FT%TZ) [$SHIFT] $KIND — 无墙。**有路径却没走 = 懒。加压有用。**" >> "$LOG"
+    echo "$(date -u +%FT%TZ) [$SHIFT] $KIND — $MSG" >> "$FAILLOG"
+  fi
+  echo "$KIND [$SHIFT]: $MSG" >&2
   exit 1
 fi
