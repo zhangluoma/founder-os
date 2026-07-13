@@ -182,16 +182,19 @@ def main() -> None:
         print("FITNESS=0.00")
         return
 
+    shipped_blind = base_s is None
+    if shipped_blind:
+        # 拿不准 → 少发分, 不是多发。基线取当前值 = SHIPPED 传感器暂时致盲 (delta 恒 0),
+        # 但绝不把 epoch 前就 live 的策略记成我们的产出。宁可瞎, 不可谄。
+        base_s = shipped
+
     try:
         res = compute(money, shipped, anchor, fresh, base_m, base_s)
     except RuntimeError as e:
         print(f"# 🛑 {e}", file=sys.stderr)
         raise SystemExit(3)
 
-    if base_s is None:
-        # 拿不准 → 少发分, 不是多发。基线取当前值 = SHIPPED 传感器暂时致盲 (delta 恒 0),
-        # 但绝不把 epoch 前就 live 的策略记成我们的产出。宁可瞎, 不可谄。
-        base_s = shipped
+    if shipped_blind:
         print("# ⚠️ epoch 时刻无 registry 快照 (registry 不在赛道 git 里?) → SHIPPED 基线取当前值,")
         print("#    SHIPPED_DELTA 传感器致盲 (恒 0)。解法: 把 data/strategy_registry.json 纳入赛道 git。")
     print(f"# epoch: {epoch_day} @ {anchor[:12]} (最早 trailer commit; 基线={base_m:.2f}, {base_src})")
