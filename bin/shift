@@ -54,7 +54,15 @@ B_LEDGER=$(echo "$BEFORE" | awk '{print $1}')
 B_JOURNAL=$(echo "$BEFORE" | awk '{print $2}')
 B_HEAD=$(echo "$BEFORE" | awk '{print $3}')
 
-echo "$(date -u +%FT%TZ) [$SHIFT] === 开班 ===" >> "$LOG"
+# --- 0. 班前检查: 契约物理上可满足吗? (伤疤 #4 的根治机制) ---
+PRE=$($PY src/preflight.py "$SHIFT" 2>&1)
+if [ $? -ne 0 ]; then
+  echo "$(date -u +%FT%TZ) [$SHIFT] REFUSED — $PRE" >> "$LOG"
+  echo "REFUSED [$SHIFT]: $PRE" >&2
+  exit 2
+fi
+
+echo "$(date -u +%FT%TZ) [$SHIFT] === 开班 ($PRE) ===" >> "$LOG"
 
 # --- 2. 跑班 ---
 PROMPT=$(cat "$PROMPT_FILE")

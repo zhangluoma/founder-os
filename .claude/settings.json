@@ -1,6 +1,17 @@
 {
   "permissions": {
-    "additionalDirectories": ["/Users/luomazhang/ClaudWorkspace/trading"]
+    "additionalDirectories": ["/Users/luomazhang/ClaudWorkspace/trading"],
+    "allow": [
+      "Bash(python3 src/ledger.py:*)",
+      "Bash(python3 src/fitness.py:*)",
+      "Bash(./bin/fitness-driven-project)",
+      "Bash(./bin/shift:*)",
+      "Bash(git add:*)", "Bash(git commit:*)", "Bash(git log:*)",
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git revert:*)",
+      "Bash(cat:*)", "Bash(ls:*)", "Bash(wc:*)", "Bash(head:*)", "Bash(tail:*)",
+      "Bash(grep:*)", "Bash(find:*)", "Bash(echo:*)",
+      "Read", "Grep", "Glob"
+    ]
   },
   "hooks": {
     "PreToolUse": [
