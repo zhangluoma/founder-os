@@ -15,6 +15,17 @@
 #
 # 主适应度 = MONEY (最终的、无可辩驳的检验: 钱有没有赚到)
 # 领先信号 = SHIPPED (结构性产出, beta 污染不了)
+#
+# --- 归因门 (idea #3, 由系统自己的思考班挖出) ---
+# **不可伪造 ≠ 可归因。**
+# founder-os 一行代码都没写进赛道时, SHIPPED/MONEY 测的是**赛道自己过去的活 + BTC 价格**,
+# 不是 founder-os。那个 fitness 是一个**奉承我们的谎言**。
+# 所以: 未写入赛道的样本 → ATTRIBUTABLE=0, 进化班**不许**用它判断变异去留。
+#
+# 它的不对称论证 (为什么别人不装这个传感器):
+#   "一个用 fitness 判断自己变异去留的 agent, 绝不会主动装一个只能把自己分数打到零的传感器。
+#    只有宪法把'诚实高于业绩'排在业绩之上的系统, 才付得起这个代价。"
+# 我们装了。因为不装 = 亲手证明它是对的。
 
 set -u
 TARGET="${FOUNDER_TARGET:-/Users/luomazhang/ClaudWorkspace/trading}"
@@ -49,7 +60,31 @@ try:
 except Exception:
     pass
 
-# 主适应度 = MONEY (钱有没有赚到 — 最终检验)。SHIPPED 作领先信号打印, 供进化班读。
+# --- 归因: founder-os 的**班次**到底写过赛道吗? ---
+# ⚠️ v1 是个安慰剂 (我在装它的几分钟内就踩了自己刚学到的教训):
+#    它 grep commit message 里有没有 "founder-os" —— 而赛道仓库里恰好有个 docs/founder-os.md,
+#    于是它返回 ATTRIBUTABLE=1。**它测的是"字符串出现过", 不是"真的有归因"。**
+#    这是同一个抽象错误的**第四次**复发 (规矩写了≠被遵守 / 权限写了≠生效 / 声明≠有效能力)。
+#
+# v2: 只认**只有 founder-os 班次能产生**的严格 trailer。
+#     班次写赛道时必须在 commit 里留: "Founder-OS-Shift: <班次名>"
+#     没有这个 trailer = 我们对赛道的真实贡献 = **0**。不许自我安慰。
+import subprocess
+attributable = 0
+try:
+    r = subprocess.run(["git", "log", "--grep=^Founder-OS-Shift:", "--extended-regexp",
+                        "--oneline", "-n", "1"],
+                       cwd=T, capture_output=True, text=True, timeout=20)
+    attributable = 1 if r.stdout.strip() else 0
+except Exception:
+    pass
+
 print(f"SHIPPED={shipped}")
 print(f"MONEY={money:.2f}")
+print(f"ATTRIBUTABLE={attributable}")
+if not attributable:
+    print("# ⚠️ 归因门: founder-os 从未写入赛道 → 上面两个数**不可归因于我们**")
+    print("#    它们测的是赛道自己过去的活 + BTC 价格。**进化班不许用它们判断变异去留。**")
+    print("#    诚实的 founder-os 贡献 = 0")
+print(f"FITNESS={money if attributable else 0:.2f}")
 PYEOF
