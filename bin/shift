@@ -53,6 +53,7 @@ BEFORE=$($PY src/contract.py snapshot)
 B_LEDGER=$(echo "$BEFORE" | awk '{print $1}')
 B_JOURNAL=$(echo "$BEFORE" | awk '{print $2}')
 B_HEAD=$(echo "$BEFORE" | awk '{print $3}')
+B_TRACK=$(echo "$BEFORE" | awk '{print $4}')
 
 # --- 0. 班前检查: 契约物理上可满足吗? (伤疤 #4 的根治机制) ---
 PRE=$($PY src/preflight.py "$SHIFT" 2>&1)
@@ -70,7 +71,7 @@ claude -p "$PROMPT" --permission-mode acceptEdits --max-turns 60 < /dev/null >> 
 CLAUDE_RC=$?
 
 # --- 3. 验证契约 (机器强制, 不靠模型自觉) ---
-MSG=$($PY src/contract.py verify "$SHIFT" "$B_LEDGER" "$B_JOURNAL" "$B_HEAD")
+MSG=$($PY src/contract.py verify "$SHIFT" "$B_LEDGER" "$B_JOURNAL" "$B_HEAD" "$B_TRACK")
 CONTRACT_RC=$?
 
 if [ $CONTRACT_RC -eq 0 ]; then

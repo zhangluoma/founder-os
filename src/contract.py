@@ -39,9 +39,36 @@ def _git_head() -> str:
         return "none"
 
 
+def _target() -> str:
+    for line in (ROOT / "constitution" / "GOAL.md").read_text().splitlines():
+        if line.startswith("FOUNDER_TARGET="):
+            return line.split("=", 1)[1].strip()
+    return ""
+
+
+def _track_attributed() -> int:
+    """赛道上**带 Founder-OS-Shift trailer** 的 commit 数。
+
+    **这是可归因的计数, 不是'HEAD 变了没'。**
+    伤疤 #8: 原版检 founder-os 的 HEAD —— 于是**任何人**的 commit 都能让 build 班 PASS
+    (包括人类在班次运行期间的并发 commit)。**不可伪造 ≠ 可归因** —— 这条 agent 教过我,
+    我把它用在了 fitness 上, **却没用在契约本身上**。
+    """
+    tgt = _target()
+    if not tgt or not Path(tgt).exists():
+        return -1
+    try:
+        r = subprocess.run(["git", "log", "--grep=^Founder-OS-Shift:", "--extended-regexp",
+                            "--oneline"], cwd=tgt, capture_output=True, text=True, timeout=20)
+        return len([l for l in r.stdout.splitlines() if l.strip()])
+    except Exception:
+        return -1
+
+
 def snapshot() -> dict:
     """班前快照。"""
-    return {"ledger": _hash(LEDGER), "journal": _hash(JOURNAL), "head": _git_head()}
+    return {"ledger": _hash(LEDGER), "journal": _hash(JOURNAL), "head": _git_head(),
+            "track": _track_attributed()}
 
 
 def verify(shift: str, before: dict) -> tuple[bool, str]:
@@ -69,9 +96,15 @@ def verify(shift: str, before: dict) -> tuple[bool, str]:
         return True, "机制已变异, 或已记录带数据的'不变'决定"
 
     if shift == "build":
-        if after["head"] == before["head"]:
-            return False, "无新 commit —— 执行班必须产出可验证的推进。"
-        return True, "已产出 commit"
+        # **检赛道, 不检车库。检可归因的 trailer, 不检"HEAD 变了没"。** (伤疤 #8)
+        if after["track"] <= before["track"]:
+            return False, (
+                "赛道上没有新的**可归因** commit。\n"
+                "  执行班的工作现场在**赛道**, 不在车库。只改 founder-os 自己 = **在车库里擦车, 圈速不会变**。\n"
+                "  赛道 commit 必须带 trailer: `Founder-OS-Shift: build`\n"
+                "  (伤疤 #8: 旧契约检 founder-os 的 HEAD → **任何人**的 commit 都能让你 PASS, 包括人类并发提交的。\n"
+                "   **不可伪造 ≠ 可归因。**)")
+        return True, f"赛道上产出可归因 commit (trailer 计数 {before['track']} → {after['track']})"
 
     return True, f"(未知班次 {shift}, 不设契约)"
 
@@ -84,7 +117,7 @@ if __name__ == "__main__":
 
     if sys.argv[1] == "snapshot":
         s = snapshot()
-        print(f"{s['ledger']} {s['journal']} {s['head']}")
+        print(f"{s['ledger']} {s['journal']} {s['head']} {s['track']}")
 
     elif sys.argv[1] == "verify":
         if len(sys.argv) < 4:
@@ -92,9 +125,10 @@ if __name__ == "__main__":
         shift = sys.argv[2]
         # 容错: 三个哈希可能作为 3 个参数传入, 也可能被引号包成 1 个
         parts = " ".join(sys.argv[3:]).split()
-        if len(parts) != 3:
-            raise SystemExit(f"班前快照应为 3 段 (ledger journal head), 收到 {len(parts)}")
-        before = dict(zip(("ledger", "journal", "head"), parts))
+        if len(parts) != 4:
+            raise SystemExit(f"班前快照应为 4 段 (ledger journal head track), 收到 {len(parts)}")
+        before = dict(zip(("ledger", "journal", "head", "track"), parts))
+        before["track"] = int(before["track"])
         ok, msg = verify(shift, before)
         print(msg)
         sys.exit(0 if ok else 1)
