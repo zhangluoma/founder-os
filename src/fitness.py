@@ -41,7 +41,8 @@ def read_config() -> tuple[str | None, bool]:
     text = GOAL.read_text()
     m = re.search(r"^FITNESS_CMD=(.*)$", text, re.M)
     cmd = m.group(1).strip() if m else None
-    if cmd in ("", "（填写, 没有就留空）", "(填写, 没有就留空)"):
+    # 模板占位符 = 没填。**fail closed**: 别让占位符伪装成配置 (「声明≠有效」)
+    if not cmd or cmd.startswith("（") or cmd.startswith("(") or "填写" in cmd:
         cmd = None
     d = re.search(r"^FITNESS_DIRECTION=(\w+)$", text, re.M)
     higher_better = (d.group(1).strip().lower() != "lower") if d else True
@@ -62,7 +63,20 @@ def record(_args) -> None:
             "  **没有不可伪造的现实反馈信号 → 无法自我进化, 只能自我催眠。**\n"
             "  去填它 (这是人的活, agent 被 hook 挡住)。")
     r = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=ROOT, timeout=600)
-    val = _num(r.stdout.strip() or r.stderr.strip())
+    out = r.stdout.strip() or r.stderr.strip()
+    val = _num(out)
+
+    # **失败要吵, 不要静。** (agent 教的; 我在这里又犯了一次)
+    # 一个记满 None 的适应度历史, 会让进化班以为"有数据" —— 而它全是空气。
+    # 空气比没有更糟: 它让所有人停止追查。
+    if r.returncode != 0 or val is None:
+        raise SystemExit(
+            f"**拒绝记录** —— FITNESS_CMD 没给出一个数 (rc={r.returncode})\n"
+            f"  命令: {cmd}\n  输出: {out[:200] or '(空)'}\n"
+            f"  **不把 None 写进适应度历史。** 一个记满 None 的历史会让进化班以为有数据,\n"
+            f"  而它全是空气 —— **空气比没有更糟: 它让所有人停止追查。**\n"
+            f"  (fail closed: 拿不准就响亮地失败, 别安静地记一笔垃圾。)")
+
     rec = {
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "value": val,

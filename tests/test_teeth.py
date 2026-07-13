@@ -140,5 +140,46 @@ class AttributionGate(unittest.TestCase):
             self.assertEqual(len(r.stdout.strip().splitlines()), 1, "真 trailer 必须被认出")
 
 
+class FitnessFailsLoud(unittest.TestCase):
+    """「失败要吵, 不要静」—— 拒绝把 None 写进适应度历史。
+
+    伤疤: 空气比没有更糟 —— 一个记满 None 的历史会让进化班以为"有数据", 让所有人停止追查。
+    """
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "src"))
+        import fitness
+        self.f = fitness
+        self.tmp = tempfile.TemporaryDirectory()
+        self._orig = (fitness.GOAL, fitness.HIST)
+        fitness.GOAL = Path(self.tmp.name) / "GOAL.md"
+        fitness.HIST = Path(self.tmp.name) / "fitness.jsonl"
+
+    def tearDown(self):
+        self.f.GOAL, self.f.HIST = self._orig
+        self.tmp.cleanup()
+
+    def test_placeholder_is_not_config(self):
+        """模板占位符 ≠ 已配置。(「声明≠有效」)"""
+        self.f.GOAL.write_text("FITNESS_CMD=（填写, 没有就留空）\nFITNESS_DIRECTION=higher\n")
+        with self.assertRaises(SystemExit):
+            self.f.record(None)
+        self.assertFalse(self.f.HIST.exists(), "拒绝时不该留下垃圾历史")
+
+    def test_command_yielding_no_number_is_refused(self):
+        """命令跑了但抠不出数 → 拒绝记录, 不写 None。"""
+        self.f.GOAL.write_text("FITNESS_CMD=echo no-number-here\nFITNESS_DIRECTION=higher\n")
+        with self.assertRaises(SystemExit):
+            self.f.record(None)
+        self.assertFalse(self.f.HIST.exists())
+
+    def test_real_number_is_recorded(self):
+        """真给出数 → 正常记录。"""
+        self.f.GOAL.write_text("FITNESS_CMD=echo 42\nFITNESS_DIRECTION=higher\n")
+        self.f.record(None)
+        rec = json.loads(self.f.HIST.read_text().splitlines()[0])
+        self.assertEqual(rec["value"], 42.0)
+
+
 if __name__ == "__main__":
     unittest.main()
