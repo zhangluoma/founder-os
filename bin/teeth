@@ -1,0 +1,7 @@
+#!/bin/sh
+# 牙齿测试入口 — 各道门在该拒绝时真的拒绝, 在该放行时真的放行。
+# (独立入口的理由: 沙箱只放行 founder-os 自己的工具; 测试自己的机制层
+#  是机制层份内的活, 不该每次都伸手要人批。)
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec python3 -m unittest discover "$ROOT/tests" -v

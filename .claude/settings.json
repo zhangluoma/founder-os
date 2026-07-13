@@ -1,16 +1,32 @@
 {
   "permissions": {
-    "additionalDirectories": ["/Users/luomazhang/ClaudWorkspace/trading"],
+    "additionalDirectories": [
+      "/Users/luomazhang/ClaudWorkspace/trading"
+    ],
     "allow": [
       "Bash(python3 src/ledger.py:*)",
       "Bash(python3 src/fitness.py:*)",
       "Bash(./bin/fitness-driven-project)",
       "Bash(./bin/shift:*)",
-      "Bash(git add:*)", "Bash(git commit:*)", "Bash(git log:*)",
-      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git revert:*)",
-      "Bash(cat:*)", "Bash(ls:*)", "Bash(wc:*)", "Bash(head:*)", "Bash(tail:*)",
-      "Bash(grep:*)", "Bash(find:*)", "Bash(echo:*)",
-      "Read", "Grep", "Glob"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git revert:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(./.venv/bin/python research/:*)",
+      "Bash(python3 research/:*)"
     ]
   },
   "hooks": {
@@ -18,7 +34,10 @@
       {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "sh hooks/protect_constitution.sh" }
+          {
+            "type": "command",
+            "command": "sh hooks/protect_constitution.sh"
+          }
         ]
       }
     ]

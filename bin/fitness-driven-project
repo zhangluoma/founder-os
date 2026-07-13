@@ -16,75 +16,41 @@
 # 主适应度 = MONEY (最终的、无可辩驳的检验: 钱有没有赚到)
 # 领先信号 = SHIPPED (结构性产出, beta 污染不了)
 #
-# --- 归因门 (idea #3, 由系统自己的思考班挖出) ---
-# **不可伪造 ≠ 可归因。**
-# founder-os 一行代码都没写进赛道时, SHIPPED/MONEY 测的是**赛道自己过去的活 + BTC 价格**,
-# 不是 founder-os。那个 fitness 是一个**奉承我们的谎言**。
-# 所以: 未写入赛道的样本 → ATTRIBUTABLE=0, 进化班**不许**用它判断变异去留。
+# --- 归因门的进化史 (每一版都是上一版的验尸报告) ---
+# v1: grep "founder-os" — 安慰剂。赛道里恰好有 docs/founder-os.md → 恒真。
+#     **测的是"字符串出现过", 不是"真的有归因"。**
+# v2: 只认严格 trailer "Founder-OS-Shift: <班次名>"。但它是**电平计 + 一次性保险丝**:
+#     一个 trailer (哪怕那份代码从没跑过) → 永久点亮 ATTRIBUTABLE → 把赛道的
+#     **全部继承净值**一次性发给 founder-os ($8312.22, 已被巡检班验尸判假)。
+#     **可归因 ≠ 有效。它把接触当成了贡献。**
+# v3: 两刀 (详见 src/fitness_bridge.py 的 docstring):
+#     1. 归因窗 30 天 (idea #6) — 曾经归因 ≠ 现在归因。窗决定「发不发」分。
+#     2. 基线差分 — FITNESS = MONEY(now) − MONEY(epoch), epoch = 最早的 trailer commit。
+#        接触发 0 分, 只有接触**之后**的变化计入。差分决定「发多少」分。
+#        基线每次从不可伪造来源**现场重算** (无 seal 文件 = 无篡改面)。
 #
-# 它的不对称论证 (为什么别人不装这个传感器):
-#   "一个用 fitness 判断自己变异去留的 agent, 绝不会主动装一个只能把自己分数打到零的传感器。
-#    只有宪法把'诚实高于业绩'排在业绩之上的系统, 才付得起这个代价。"
-# 我们装了。因为不装 = 亲手证明它是对的。
+# 逻辑全部住在 src/fitness_bridge.py —— 纯函数, 牙齿测试 (tests/) 咬得到。
+# 这个壳只负责: 找到赛道、找到解释器、把控制权交出去。
 
 set -u
-TARGET="${FOUNDER_TARGET:-/Users/luomazhang/ClaudWorkspace/trading}"
-[ -d "$TARGET" ] || { echo "0"; exit 1; }
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# 赛道路径的信任根 = 宪法 (GOAL.local.md > GOAL.md), 环境变量只作后备。
+# 为什么: 本班实测环境变量被污染成了模板占位符 /absolute/path/to/your/project ——
+# 「占位符 ≠ 配置」(fitness.py 同款伤疤), 且 agent 改不了 constitution/, 改得了 env。
+GOALF="$ROOT/constitution/GOAL.local.md"
+[ -f "$GOALF" ] || GOALF="$ROOT/constitution/GOAL.md"
+TARGET="$(sed -n 's/^FOUNDER_TARGET=//p' "$GOALF" | head -1)"
+[ -n "$TARGET" ] || TARGET="${FOUNDER_TARGET:-}"
+case "$TARGET" in
+  ""|*/absolute/path/*)
+    # 失败要吵: 别 echo "0" —— 那会被 fitness.py 的 _num 当成一个合法读数。
+    echo "🛑 赛道路径未配置 (拿到的是空值或模板占位符: '$TARGET')。去填 constitution/GOAL.local.md 的 FOUNDER_TARGET。" >&2
+    exit 1;;
+esac
+[ -d "$TARGET" ] || { echo "🛑 赛道目录不存在: $TARGET (FOUNDER_TARGET 配错了?)" >&2; exit 1; }
 
 PY="$TARGET/.venv/bin/python"
 [ -x "$PY" ] || PY=python3
 
-"$PY" - "$TARGET" <<'PYEOF'
-import json, sqlite3, sys
-from pathlib import Path
-
-T = Path(sys.argv[1])
-
-# --- MONEY: 真钱净值 (交易所 API 记录, agent 伪造不了) ---
-money = 0.0
-try:
-    c = sqlite3.connect(T / "data" / "oil_indicators.db")
-    r = c.execute("SELECT value FROM indicators WHERE indicator='networth_usd' "
-                  "ORDER BY period_date DESC LIMIT 1").fetchone()
-    c.close()
-    money = float(r[0]) if r else 0.0
-except Exception:
-    pass
-
-# --- SHIPPED: 过了前向门的真产出 (28天真实数据 + 事前写死的门, 伪造不了) ---
-shipped = 0
-try:
-    reg = json.loads((T / "data" / "strategy_registry.json").read_text())
-    shipped = sum(1 for v in reg.values()
-                  if isinstance(v, dict) and str(v.get("status", "")).startswith("live"))
-except Exception:
-    pass
-
-# --- 归因: founder-os 的**班次**到底写过赛道吗? ---
-# ⚠️ v1 是个安慰剂 (我在装它的几分钟内就踩了自己刚学到的教训):
-#    它 grep commit message 里有没有 "founder-os" —— 而赛道仓库里恰好有个 docs/founder-os.md,
-#    于是它返回 ATTRIBUTABLE=1。**它测的是"字符串出现过", 不是"真的有归因"。**
-#    这是同一个抽象错误的**第四次**复发 (规矩写了≠被遵守 / 权限写了≠生效 / 声明≠有效能力)。
-#
-# v2: 只认**只有 founder-os 班次能产生**的严格 trailer。
-#     班次写赛道时必须在 commit 里留: "Founder-OS-Shift: <班次名>"
-#     没有这个 trailer = 我们对赛道的真实贡献 = **0**。不许自我安慰。
-import subprocess
-attributable = 0
-try:
-    r = subprocess.run(["git", "log", "--grep=^Founder-OS-Shift:", "--extended-regexp",
-                        "--oneline", "-n", "1"],
-                       cwd=T, capture_output=True, text=True, timeout=20)
-    attributable = 1 if r.stdout.strip() else 0
-except Exception:
-    pass
-
-print(f"SHIPPED={shipped}")
-print(f"MONEY={money:.2f}")
-print(f"ATTRIBUTABLE={attributable}")
-if not attributable:
-    print("# ⚠️ 归因门: founder-os 从未写入赛道 → 上面两个数**不可归因于我们**")
-    print("#    它们测的是赛道自己过去的活 + BTC 价格。**进化班不许用它们判断变异去留。**")
-    print("#    诚实的 founder-os 贡献 = 0")
-print(f"FITNESS={money if attributable else 0:.2f}")
-PYEOF
+exec "$PY" "$ROOT/src/fitness_bridge.py" "$TARGET"

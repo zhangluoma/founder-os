@@ -18,8 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import contract  # noqa: E402
-import ledger    # noqa: E402
+import contract        # noqa: E402
+import fitness_bridge  # noqa: E402
+import ledger          # noqa: E402
 
 
 class LedgerGates(unittest.TestCase):
@@ -179,6 +180,50 @@ class FitnessFailsLoud(unittest.TestCase):
         self.f.record(None)
         rec = json.loads(self.f.HIST.read_text().splitlines()[0])
         self.assertEqual(rec["value"], 42.0)
+
+
+class BaselineDifferencing(unittest.TestCase):
+    """归因门 v3 的核心断言: **可归因 ≠ 有效; 接触 ≠ 贡献。**
+
+    验尸案由: 一份从没运行过的代码 + 一个 trailer, 在 v2 下拿走了赛道的
+    全部继承净值 ($8312.22)。v3 之后, 同样的操作只能拿 0。
+    """
+
+    def test_untouched_track_scores_zero(self):
+        """从未归因 → 0 分, 不管赛道净值多高 (v2 已有, v3 必须保住)。"""
+        r = fitness_bridge.compute(8312.22, 3, anchor=None, fresh=False,
+                                   base_money=None, base_shipped=None)
+        self.assertEqual(r["fitness"], 0.0)
+        self.assertEqual(r["attributable"], 0)
+
+    def test_stale_attribution_scores_zero(self):
+        """idea #6: 曾经归因 ≠ 现在归因。30 天窗外 → 0 分。"""
+        r = fitness_bridge.compute(8312.22, 3, anchor="abc123", fresh=False,
+                                   base_money=100.0, base_shipped=0)
+        self.assertEqual(r["fitness"], 0.0)
+        self.assertEqual(r["attributable"], 0)
+
+    def test_inherited_level_is_not_contribution(self):
+        """验尸案本尊: 首次归因时, 分数必须是 0, 不是继承电平 8312.22。"""
+        r = fitness_bridge.compute(8312.22, 3, anchor="abc123", fresh=True,
+                                   base_money=8312.22, base_shipped=3)
+        self.assertEqual(r["fitness"], 0.0, "接触本身必须发 0 分, 不是发电平")
+        self.assertEqual(r["shipped_delta"], 0, "epoch 前就 live 的策略不是我们的产出")
+
+    def test_only_post_epoch_change_counts(self):
+        """epoch 之后赛道真的变了 → 只有变化量计入。"""
+        r = fitness_bridge.compute(8500.00, 4, anchor="abc123", fresh=True,
+                                   base_money=8312.22, base_shipped=3)
+        self.assertAlmostEqual(r["fitness"], 187.78, places=2)
+        self.assertEqual(r["shipped_delta"], 1)
+        self.assertNotAlmostEqual(r["fitness"], 8500.00, places=2,
+                                  msg="电平绝不允许再漏出来")
+
+    def test_missing_baseline_fails_loud(self):
+        """归因成立但基线算不出 → 必须吵 (RuntimeError), 禁止静默发分或发 0 装清白。"""
+        with self.assertRaises(RuntimeError):
+            fitness_bridge.compute(8312.22, 3, anchor="abc123", fresh=True,
+                                   base_money=None, base_shipped=None)
 
 
 if __name__ == "__main__":
