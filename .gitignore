@@ -3,3 +3,10 @@ state/.*.lock
 .env
 __pycache__/
 *.pyc
+
+# 实例数据 (每个用户自己的, 不是产品的一部分)
+constitution/GOAL.local.md
+state/ideas.jsonl
+state/journal.md
+state/fitness.jsonl
+state/holdout_seal.json

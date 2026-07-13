@@ -39,8 +39,13 @@ def _git_head() -> str:
         return "none"
 
 
+def _goal_file() -> Path:
+    loc = ROOT / "constitution" / "GOAL.local.md"
+    return loc if loc.exists() else ROOT / "constitution" / "GOAL.md"
+
+
 def _target() -> str:
-    for line in (ROOT / "constitution" / "GOAL.md").read_text().splitlines():
+    for line in (_goal_file()).read_text().splitlines():
         if line.startswith("FOUNDER_TARGET="):
             return line.split("=", 1)[1].strip()
     return ""

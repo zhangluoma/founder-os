@@ -28,7 +28,9 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GOAL = ROOT / "constitution" / "GOAL.md"
+GOAL = (ROOT / "constitution" / "GOAL.local.md"
+        if (ROOT / "constitution" / "GOAL.local.md").exists()
+        else ROOT / "constitution" / "GOAL.md")
 HIST = ROOT / "state" / "fitness.jsonl"
 
 
